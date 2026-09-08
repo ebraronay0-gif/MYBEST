@@ -11,66 +11,139 @@ jobs:
       - name: GitHub dosyalarını al
         uses: actions/checkout@v4
 
-      - name: ZIP'i çıkart
+      - name: ZIP'i bul ve çıkart
+        shell: bash
         run: |
-          mkdir mybest
-          unzip -q MYBEST-gemini-test-ready.zip -d mybest
-          echo "ZIP çıkarıldı"
-          find mybest -name package.json
+          set -e
 
-      - name: Node.js kurulumu
+          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" -print -quit)
+
+          if [ -z "$ZIP_FILE" ]; then
+            echo "HATA: ZIP bulunamadı!"
+            exit 1
+          fi
+
+          echo "ZIP: $ZIP_FILE"
+
+          rm -rf proje
+          mkdir -p proje
+          unzip -q "$ZIP_FILE" -d proje
+
+          APP_JSON=$(find proje -type f -name "app.json" -print -quit)
+
+          if [ -z "$APP_JSON" ]; then
+            echo "HATA: app.json bulunamadı!"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$APP_JSON")
+
+          echo "Proje: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
 
-      - name: Proje klasörünü bul
-        run: |
-          PROJECT=$(find mybest -name package.json -not -path "*/node_modules/*" | head -1 | xargs dirname)
-          echo "PROJECT=$PROJECT" >> $GITHUB_ENV
-          echo "Proje klasörü: $PROJECT"
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-      - name: Expo SDK 57 sürümlerini ayarla
-        working-directory: ${{ env.PROJECT }}
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Android SDK 36
+        shell: bash
         run: |
-          npm pkg set dependencies.expo="~57.0.0"
-          npm pkg set dependencies.expo-constants="~57.0.17"
-          npm pkg set dependencies.expo-haptics="~57.0.2"
-          npm pkg set dependencies.expo-image-picker="~57.0.16"
-          npm pkg set dependencies.expo-linking="~57.0.9"
-          npm pkg set dependencies.expo-localization="~57.0.1"
-          npm pkg set dependencies.expo-router="~57.0.19"
-          npm pkg set dependencies.expo-status-bar="~57.0.1"
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Android ayarlarını güvenli hale getir
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+
+          python3 - <<'PY'
+          import json
+
+          with open("app.json", "r", encoding="utf-8") as f:
+              data = json.load(f)
+
+          expo = data.setdefault("expo", {})
+
+          # Android başlangıç çökme riskini azalt
+          expo["newArchEnabled"] = False
+
+          android = expo.setdefault("android", {})
+          android["package"] = "com.mybest.ai"
+
+          with open("app.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+
+          print("New Architecture: FALSE")
+          print("Android package: com.mybest.ai")
+          PY
 
       - name: Bağımlılıkları kur
-        working-directory: ${{ env.PROJECT }}
+        shell: bash
         run: |
-          rm -rf node_modules package-lock.json
+          set -e
+          cd "$PROJECT_DIR"
+
+          rm -rf node_modules
+          rm -f package-lock.json
+
           npm install --legacy-peer-deps
 
-      - name: Expo yapılandırmasını kontrol et
-        working-directory: ${{ env.PROJECT }}
+      - name: Expo Android projesini temiz oluştur
+        shell: bash
+        env:
+          CI: "1"
         run: |
-          npx expo config --type public
+          set -e
+          cd "$PROJECT_DIR"
 
-      - name: Android projesini oluştur
-        working-directory: ${{ env.PROJECT }}
-        run: |
-          npx expo prebuild --platform android --no-install
+          npx expo prebuild --platform android --clean
 
-      - name: Gradle izinlerini ver
-        working-directory: ${{ env.PROJECT }}
+      - name: Gradle temizle
+        shell: bash
         run: |
-          chmod +x android/gradlew
+          cd "$PROJECT_DIR/android"
+          chmod +x gradlew
+          ./gradlew clean --no-daemon
 
-      - name: Android APK oluştur
-        working-directory: ${{ env.PROJECT }}
+      - name: Release APK oluştur
+        shell: bash
+        env:
+          CI: "1"
+          NODE_ENV: production
         run: |
-          cd android
+          set -e
+          cd "$PROJECT_DIR/android"
+
           ./gradlew assembleRelease --no-daemon
 
-      - name: APK'yı GitHub'a yükle
+      - name: APK kontrolü
+        shell: bash
+        run: |
+          APK_DIR="$PROJECT_DIR/android/app/build/outputs/apk/release"
+
+          echo "APK dosyaları:"
+          find "$APK_DIR" -type f -name "*.apk"
+
+          APK_COUNT=$(find "$APK_DIR" -type f -name "*.apk" | wc -l)
+
+          if [ "$APK_COUNT" -eq 0 ]; then
+            echo "HATA: APK oluşmadı!"
+            exit 1
+          fi
+
+      - name: MYBEST APK
         uses: actions/upload-artifact@v4
         with:
-          name: MYBEST-APK
-          path: ${{ env.PROJECT }}/android/app/build/outputs/apk/release/*.apk
+          name: MYBEST-APK-FIXED
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
