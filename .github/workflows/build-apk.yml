@@ -29,7 +29,7 @@ jobs:
           echo "PROJECT=$PROJECT" >> $GITHUB_ENV
           echo "Proje: $PROJECT"
 
-      - name: Expo paket sürümlerini düzelt
+      - name: Expo SDK 57 sürümlerini ayarla
         working-directory: ${{ env.PROJECT }}
         run: |
           npm pkg set dependencies.expo="~57.0.0"
@@ -41,32 +41,20 @@ jobs:
           npm pkg set dependencies.expo-router="~57.0.19"
           npm pkg set dependencies.expo-status-bar="~57.0.1"
 
-          echo "Düzeltilmiş package.json:"
-          cat package.json
-
       - name: Bağımlılıkları kur
         working-directory: ${{ env.PROJECT }}
         run: |
+          rm -rf node_modules package-lock.json
           npm install --legacy-peer-deps
 
-      - name: Expo paketlerini hizala
+      - name: Expo yapılandırmasını kontrol et
         working-directory: ${{ env.PROJECT }}
         run: |
-          npx expo install --fix
-
-      - name: Bağımlılıkları son kez tamamla
-        working-directory: ${{ env.PROJECT }}
-        run: |
-          npm install --legacy-peer-deps
+          npx expo config --type public
 
       - name: EAS kurulumu
         run: |
           npm install -g eas-cli
-
-      - name: Expo projesini kontrol et
-        working-directory: ${{ env.PROJECT }}
-        run: |
-          npx expo config --type public
 
       - name: APK oluştur
         working-directory: ${{ env.PROJECT }}
