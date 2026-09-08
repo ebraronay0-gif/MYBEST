@@ -1,0 +1,44 @@
+name: MYBEST APK Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ZIP dosyasını indir
+        uses: actions/checkout@v4
+
+      - name: Node.js kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: ZIP'i çıkart
+        run: |
+          mkdir mybest
+          unzip -q MYBEST-gemini-test-ready.zip -d mybest
+          echo "ZIP çıkarıldı:"
+          find mybest -maxdepth 3 -type f | head -100
+
+      - name: Proje klasörünü bul
+        run: |
+          PROJECT=$(find mybest -name package.json -not -path "*/node_modules/*" | head -1 | xargs dirname)
+          echo "PROJECT=$PROJECT" >> $GITHUB_ENV
+          echo "Proje: $PROJECT"
+
+      - name: Bağımlılıkları kur
+        working-directory: ${{ env.PROJECT }}
+        run: npm install
+
+      - name: EAS kurulumu
+        run: npm install -g eas-cli
+
+      - name: APK oluştur
+        working-directory: ${{ env.PROJECT }}
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: eas build --platform android --profile preview --non-interactive
