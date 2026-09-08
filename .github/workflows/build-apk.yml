@@ -8,21 +8,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: ZIP dosyasını indir
+      - name: GitHub dosyalarını al
         uses: actions/checkout@v4
-
-      - name: Node.js kurulumu
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
 
       - name: ZIP'i çıkart
         run: |
           mkdir mybest
           unzip -q MYBEST-gemini-test-ready.zip -d mybest
-          echo "ZIP çıkarıldı:"
-          find mybest -maxdepth 3 -type f | head -100
+          echo "ZIP çıkarıldı"
+          find mybest -name package.json
+
+      - name: Node.js kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
 
       - name: Proje klasörünü bul
         run: |
