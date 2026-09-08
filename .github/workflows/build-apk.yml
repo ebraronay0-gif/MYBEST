@@ -29,26 +29,48 @@ jobs:
           echo "PROJECT=$PROJECT" >> $GITHUB_ENV
           echo "Proje: $PROJECT"
 
-      - name: Expo ve Constants sürümlerini düzelt
+      - name: Expo paket sürümlerini düzelt
         working-directory: ${{ env.PROJECT }}
         run: |
-          npm install expo@~57.0.0 expo-constants@~57.0.17 --legacy-peer-deps
+          npm pkg set dependencies.expo="~57.0.0"
+          npm pkg set dependencies.expo-constants="~57.0.17"
+          npm pkg set dependencies.expo-haptics="~57.0.2"
+          npm pkg set dependencies.expo-image-picker="~57.0.16"
+          npm pkg set dependencies.expo-linking="~57.0.9"
+          npm pkg set dependencies.expo-localization="~57.0.1"
+          npm pkg set dependencies.expo-router="~57.0.19"
+          npm pkg set dependencies.expo-status-bar="~57.0.1"
+
+          echo "Düzeltilmiş package.json:"
+          cat package.json
+
+      - name: Bağımlılıkları kur
+        working-directory: ${{ env.PROJECT }}
+        run: |
+          npm install --legacy-peer-deps
 
       - name: Expo paketlerini hizala
         working-directory: ${{ env.PROJECT }}
         run: |
           npx expo install --fix
 
-      - name: Bağımlılıkları tamamla
+      - name: Bağımlılıkları son kez tamamla
         working-directory: ${{ env.PROJECT }}
         run: |
           npm install --legacy-peer-deps
 
       - name: EAS kurulumu
-        run: npm install -g eas-cli
+        run: |
+          npm install -g eas-cli
+
+      - name: Expo projesini kontrol et
+        working-directory: ${{ env.PROJECT }}
+        run: |
+          npx expo config --type public
 
       - name: APK oluştur
         working-directory: ${{ env.PROJECT }}
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform android --profile preview --non-interactive
+        run: |
+          eas build --platform android --profile preview --non-interactive
