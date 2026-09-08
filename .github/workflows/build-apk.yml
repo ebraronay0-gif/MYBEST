@@ -29,9 +29,15 @@ jobs:
           echo "PROJECT=$PROJECT" >> $GITHUB_ENV
           echo "Proje: $PROJECT"
 
+      - name: Expo paketlerini düzelt
+        working-directory: ${{ env.PROJECT }}
+        run: |
+          npx expo install --fix
+
       - name: Bağımlılıkları kur
         working-directory: ${{ env.PROJECT }}
-        run: npm install --legacy-peer-deps
+        run: |
+          npm install --legacy-peer-deps
 
       - name: EAS kurulumu
         run: npm install -g eas-cli
