@@ -29,12 +29,17 @@ jobs:
           echo "PROJECT=$PROJECT" >> $GITHUB_ENV
           echo "Proje: $PROJECT"
 
-      - name: Expo paketlerini düzelt
+      - name: Expo ve Constants sürümlerini düzelt
+        working-directory: ${{ env.PROJECT }}
+        run: |
+          npm install expo@~57.0.0 expo-constants@~57.0.17 --legacy-peer-deps
+
+      - name: Expo paketlerini hizala
         working-directory: ${{ env.PROJECT }}
         run: |
           npx expo install --fix
 
-      - name: Bağımlılıkları kur
+      - name: Bağımlılıkları tamamla
         working-directory: ${{ env.PROJECT }}
         run: |
           npm install --legacy-peer-deps
