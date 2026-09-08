@@ -23,8 +23,6 @@ jobs:
             exit 1
           fi
 
-          echo "ZIP: $ZIP_FILE"
-
           rm -rf proje
           mkdir -p proje
           unzip -q "$ZIP_FILE" -d proje
@@ -61,11 +59,54 @@ jobs:
           yes | sdkmanager --licenses || true
           sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Android ayarlarını güvenli hale getir
+      - name: Eski Expo paketlerini temizle
+        working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
-          cd "$PROJECT_DIR"
+          npm pkg delete dependencies.expo-constants
+          npm pkg delete dependencies.expo-haptics
+          npm pkg delete dependencies.expo-image-picker
+          npm pkg delete dependencies.expo-linking
+          npm pkg delete dependencies.expo-localization
+          npm pkg delete dependencies.expo-router
+          npm pkg delete dependencies.expo-status-bar
 
+          npm pkg set dependencies.expo="~57.0.0"
+
+          rm -rf node_modules
+          rm -f package-lock.json
+
+      - name: Expo SDK 57'yi kur
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          npm install expo@~57.0.0 --legacy-peer-deps
+
+      - name: Expo paketlerini doğru sürümlerle kur
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          npx expo install \
+            expo-constants \
+            expo-haptics \
+            expo-image-picker \
+            expo-linking \
+            expo-localization \
+            expo-router \
+            expo-status-bar \
+            react-native-safe-area-context \
+            react-native-screens
+
+      - name: Bağımlılıkları tamamla
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: Android ayarlarını düzelt
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
           python3 - <<'PY'
           import json
 
@@ -74,7 +115,6 @@ jobs:
 
           expo = data.setdefault("expo", {})
 
-          # Android başlangıç çökme riskini azalt
           expo["newArchEnabled"] = False
 
           android = expo.setdefault("android", {})
@@ -87,43 +127,33 @@ jobs:
           print("Android package: com.mybest.ai")
           PY
 
-      - name: Bağımlılıkları kur
+      - name: Expo yapılandırmasını kontrol et
+        working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
-          set -e
-          cd "$PROJECT_DIR"
+          npx expo config --type public
 
-          rm -rf node_modules
-          rm -f package-lock.json
-
-          npm install --legacy-peer-deps
-
-      - name: Expo Android projesini temiz oluştur
-        shell: bash
+      - name: Android projesini temiz oluştur
+        working-directory: ${{ env.PROJECT_DIR }}
         env:
           CI: "1"
         run: |
-          set -e
-          cd "$PROJECT_DIR"
-
           npx expo prebuild --platform android --clean
 
       - name: Gradle temizle
+        working-directory: ${{ env.PROJECT_DIR }}/android
         shell: bash
         run: |
-          cd "$PROJECT_DIR/android"
           chmod +x gradlew
           ./gradlew clean --no-daemon
 
       - name: Release APK oluştur
+        working-directory: ${{ env.PROJECT_DIR }}/android
         shell: bash
         env:
           CI: "1"
           NODE_ENV: production
         run: |
-          set -e
-          cd "$PROJECT_DIR/android"
-
           ./gradlew assembleRelease --no-daemon
 
       - name: APK kontrolü
@@ -131,12 +161,9 @@ jobs:
         run: |
           APK_DIR="$PROJECT_DIR/android/app/build/outputs/apk/release"
 
-          echo "APK dosyaları:"
           find "$APK_DIR" -type f -name "*.apk"
 
-          APK_COUNT=$(find "$APK_DIR" -type f -name "*.apk" | wc -l)
-
-          if [ "$APK_COUNT" -eq 0 ]; then
+          if ! find "$APK_DIR" -type f -name "*.apk" | grep -q ".apk"; then
             echo "HATA: APK oluşmadı!"
             exit 1
           fi
